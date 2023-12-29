@@ -1,5 +1,45 @@
 -- Active: 1703100583880@@127.0.0.1@5432@librarydb@public
 
+-- Function for issuing a book and insert a records into loans, and updating the record in copies of books
+CREATE OR REPLACE FUNCTION issue_book(
+    p_user_id INTEGER,
+    p_book_id INTEGER
+) RETURNS VOID AS $$
+DECLARE
+    v_loan_id INTEGER;
+BEGIN
+    -- Check if any copy of the book is available
+    IF EXISTS (
+        SELECT 1
+        FROM copies_of_books AS c
+        WHERE c.book_id = p_book_id AND c.availability = 'Available' AND c.on_loan = 0
+    ) THEN
+        -- Insert into loans table
+        INSERT INTO loans (start_date, due_date, status, user_id, copy_id)
+        SELECT CURRENT_DATE, CURRENT_DATE + INTERVAL '14 days', 'Not Returned', p_user_id, c.copy_id
+        FROM copies_of_books AS c
+        WHERE c.book_id = p_book_id AND c.availability = 'Available' AND c.on_loan = 0
+        LIMIT 1
+        RETURNING loan_id INTO v_loan_id;
+
+        -- Update copy status
+        UPDATE copies_of_books
+        SET availability = 'Not Available', on_loan = 1
+        WHERE copy_id IN (SELECT copy_id FROM loans WHERE loan_id = v_loan_id);
+
+        RAISE NOTICE 'Book issued successfully. Loan ID: %', v_loan_id;
+
+    ELSE
+        RAISE EXCEPTION 'No available copies of the book for loan.';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Testing of the function issue_book
+SELECT issue_book(1, 1);
+SELECT * FROM copies_of_books WHERE copy_id = 1;
+
+
 -- Function for updating records into loans, copies_of_books, fines based on loan status 
 CREATE OR REPLACE FUNCTION update_loan_status(
     p_loan_id INT,
@@ -50,15 +90,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- -- Testing of the function update_loan_status 
+-- Testing of the function update_loan_status 
 SELECT * FROM loans WHERE loan_id BETWEEN 1 AND 10;
 SELECT *
 FROM copies_of_books
 INNER JOIN loans ON copies_of_books.copy_id = loans.copy_id
 WHERE loan_id BETWEEN 1 AND 10;  
-SELECT update_loan_status(6, '2024-01-01');
-SELECT update_loan_status(7, '2024-01-15');
-SELECT update_loan_status(8, '2023-12-25');
+SELECT update_loan_status(1, '2024-01-01');
+SELECT update_loan_status(2, '2024-01-15');
+SELECT update_loan_status(3, '2023-12-25');
 SELECT update_loan_status(4, '2023-12-31');
 SELECT update_loan_status(5, '2023-12-10');
 SELECT * FROM loans WHERE loan_id BETWEEN 1 AND 10;
@@ -179,7 +219,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-
 
 
 SELECT update_fine_payments(1, '2023-12-03', 25.00);

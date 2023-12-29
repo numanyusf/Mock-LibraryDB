@@ -136,7 +136,7 @@ def generate_loan_data(user_id, copy_id):
     }
 
 # Path to GoodReads_100k_books CSV file
-path = 'C:/Users/numan/Projects/Library-Database/data/GoodReads_100k_books.csv'
+path = 'C:/Users/numan/Projects/Mock-LibraryDB/data/GoodReads_100k_books.csv'
 df = pd.read_csv(path).drop(['img', 'isbn13', 'link'], axis=1)
 book_data = df.dropna()
 
